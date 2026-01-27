@@ -1,4 +1,3 @@
-/* 09:32 15/03/2023 - change triggering comment */
 #ifndef PINDEF_H
 #define PINDEF_H
 
@@ -17,7 +16,7 @@
 #if defined(SINGLE_BOARD)
 #define waterPin      PB15
 #else
-#define waterPin      PA12
+#define waterPin      PB12
 #endif
 
 #ifdef PCBV2
