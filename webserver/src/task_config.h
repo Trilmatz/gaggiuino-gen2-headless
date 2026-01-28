@@ -8,7 +8,7 @@
 #define CONFIG_ASYNC_TCP_USE_WDT 1
 #endif
 
-#include "FreeRTOS.h"
+#include <freertos/FreeRTOS.h>
 
 // Task priorities - higher number = higher prioritiy
 const UBaseType_t PRIORITY_BLE_SCALES_MAINTAINANCE = 1;

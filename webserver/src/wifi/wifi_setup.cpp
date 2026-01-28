@@ -2,6 +2,8 @@
 #include <WiFi.h>
 #include "../task_config.h"
 #include "../log/log.h"
+#include <vector>
+#include <list>
 
 /**
   * Helper class for persisting and retrieving WiFi connection credentials
@@ -32,6 +34,8 @@ void wifiTask(void* params);
 void wifiSetup() {
   // Initialize WiFi connectivity
   WiFi.mode(WIFI_AP_STA);
+
+  WiFi.setSleep(false);
 
   // Setup Access Point - Default: 192.168.4.1
   WiFi.softAP("Gaggiuino AP", NULL);
