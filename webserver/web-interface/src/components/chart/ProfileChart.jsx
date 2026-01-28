@@ -31,14 +31,14 @@ ChartJS.register(
 
 function getPressureTarget(phase) {
   if (phase.type === PhaseTypes.FLOW) {
-    return [phase.restriction, phase.restriction];
+    return [null, null];
   }
   return [phase.target.start, phase.target.end || phase.target.start];
 }
 
 function getFlowTarget(phase) {
   if (phase.type === PhaseTypes.PRESSURE) {
-    return [phase.restriction, phase.restriction];
+    return [null, null];
   }
   return [phase.target.start, phase.target.end || phase.target.start];
 }
@@ -51,27 +51,40 @@ function profileToDatasets(profile) {
   };
 
   let phaseStartTime = 0;
-  profile.phases.forEach((phase) => {
-    const phaseTime = phase.stopConditions?.time || 5000;
-    const transitionTime = phase.target.time || phaseTime;
-    const pressureTargets = getPressureTarget(phase);
-    const flowTargets = getFlowTarget(phase);
+  
+  if (profile && profile.phases) {
+    profile.phases.forEach((phase) => {
+      const phaseTimeSec = phase.stopConditions?.time; 
+      const phaseTime = phaseTimeSec ? phaseTimeSec * 1000 : 5000;
 
-    data.labels.push(phaseStartTime / 1000);
-    data.flowData.push(flowTargets[0]);
-    data.pressureData.push(pressureTargets[0]);
+      const transitionTimeSec = phase.target.time;
+      const transitionTime = (transitionTimeSec !== undefined) 
+        ? transitionTimeSec * 1000 
+        : phaseTime;
 
-    if (transitionTime < phaseTime) {
-      data.labels.push((phaseStartTime + transitionTime) / 1000);
+      const pressureTargets = getPressureTarget(phase);
+      const flowTargets = getFlowTarget(phase);
+
+      // Start
+      data.labels.push(phaseStartTime / 1000);
+      data.flowData.push(flowTargets[0]);
+      data.pressureData.push(pressureTargets[0]);
+
+      // Ramp End (if distinct from Phase End)
+      if (transitionTime < phaseTime && transitionTime > 0) {
+        data.labels.push((phaseStartTime + transitionTime) / 1000);
+        data.flowData.push(flowTargets[1]);
+        data.pressureData.push(pressureTargets[1]);
+      }
+      
+      // End
+      data.labels.push((phaseStartTime + phaseTime) / 1000);
       data.flowData.push(flowTargets[1]);
       data.pressureData.push(pressureTargets[1]);
-    }
-    data.labels.push((phaseStartTime + phaseTime) / 1000);
-    data.flowData.push(flowTargets[1]);
-    data.pressureData.push(pressureTargets[1]);
 
-    phaseStartTime += phaseTime + 500;
-  });
+      phaseStartTime += phaseTime + 500;
+    });
+  }
 
   return data;
 }
@@ -87,7 +100,9 @@ function mapToChartData(profile, theme) {
         backgroundColor: alpha(theme.palette.pressure.main, 0.8),
         borderColor: theme.palette.pressure.main,
         tension: 0.11,
-        yAxisID: 'y2',
+        // NOTE: If graph is still empty, try changing 'y2' to 'y'
+        yAxisID: 'y2', 
+        spanGaps: true, // Connect lines over nulls
       },
       {
         label: 'Flow',
@@ -95,7 +110,9 @@ function mapToChartData(profile, theme) {
         backgroundColor: alpha(theme.palette.flow.main, 0.8),
         borderColor: theme.palette.flow.main,
         tension: 0,
+        // NOTE: If graph is still empty, try changing 'y2' to 'y'
         yAxisID: 'y2',
+        spanGaps: true,
       },
     ],
   };
@@ -104,7 +121,12 @@ function mapToChartData(profile, theme) {
 function ProfileChart({ profile }) {
   const chartRef = useRef(null);
   const theme = useTheme();
-  const config = useMemo(() => getShotChartConfig(theme), [theme]);
+  // Ensure we don't crash if theme is loading
+  const config = useMemo(() => {
+    try { return getShotChartConfig(theme); } 
+    catch(e) { return {}; }
+  }, [theme]);
+  
   const chartData = mapToChartData(profile, theme);
 
   return (

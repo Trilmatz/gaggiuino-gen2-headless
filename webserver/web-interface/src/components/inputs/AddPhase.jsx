@@ -11,12 +11,17 @@ import MenuList from '@mui/material/MenuList';
 
 const options = ['Restriction', 'Pressure', 'Flow'];
 
-export default function SplitButton() {
+export default function AddPhase({ onAdd }) {
   const [open, setOpen] = React.useState(false);
   const anchorRef = React.useRef(null);
-  const [selectedIndex, setSelectedIndex] = React.useState(1);
+  const [selectedIndex, setSelectedIndex] = React.useState(0);
 
-  const handleClick = () => options[selectedIndex];
+  const handleClick = () => {
+    if (onAdd) {
+      onAdd(options[selectedIndex]);
+    }
+  };
+
   const handleMenuItemClick = (event, index) => {
     setSelectedIndex(index);
     setOpen(false);
@@ -30,14 +35,13 @@ export default function SplitButton() {
     if (anchorRef.current && anchorRef.current.contains(event.target)) {
       return;
     }
-
     setOpen(false);
   };
 
   return (
     <React.Fragment>
       <ButtonGroup variant="contained" ref={anchorRef} aria-label="split button">
-        <Button onClick={handleClick}>ADD</Button>
+        <Button onClick={handleClick}>{`ADD ${options[selectedIndex]}`}</Button>
         <Button
           size="small"
           aria-controls={open ? 'split-button-menu' : undefined}
@@ -50,9 +54,7 @@ export default function SplitButton() {
         </Button>
       </ButtonGroup>
       <Popper
-        sx={{
-          zIndex: 1,
-        }}
+        sx={{ zIndex: 1 }}
         open={open}
         anchorEl={anchorRef.current}
         role={undefined}
@@ -73,7 +75,6 @@ export default function SplitButton() {
                   {options.map((option, index) => (
                     <MenuItem
                       key={option}
-                    //   disabled={index === 2}
                       selected={index === selectedIndex}
                       onClick={(event) => handleMenuItemClick(event, index)}
                     >

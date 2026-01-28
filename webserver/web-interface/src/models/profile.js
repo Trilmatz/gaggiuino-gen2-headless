@@ -4,6 +4,10 @@ function notDefined(value) {
   return (value === null || value === undefined);
 }
 
+function getKeyByValue(object, value) {
+  return Object.keys(object).find(key => object[key] === value);
+}
+
 export const PhaseTypes = Object.freeze({
   FLOW: Symbol('FLOW'),
   PRESSURE: Symbol('PRESSURE'),
@@ -134,6 +138,32 @@ export class Profile {
   constructor(phases, globalStopConditions) {
     this.phases = phases;
     this.globalStopConditions = globalStopConditions;
+  }
+  
+  serialize() {
+    return {
+      phases: this.phases.map(phase => ({
+        type: getKeyByValue(PhaseTypes, phase.type), // Converts Symbol(FLOW) -> "FLOW"
+        restriction: phase.restriction,
+        target: {
+          start: phase.target.start,
+          end: phase.target.end,
+          // Converts Symbol(LINEAR) -> "LINEAR" -> then mapped to int 0,1,2 on C++ side
+          curve: getKeyByValue(CurveStyles, phase.target.curve), 
+          time: phase.target.time
+        },
+        stopConditions: phase.stopConditions ? {
+          time: phase.stopConditions.time,
+          pressureAbove: phase.stopConditions.pressureAbove,
+          pressureBelow: phase.stopConditions.pressureBelow,
+          flowAbove: phase.stopConditions.flowAbove,
+          flowBelow: phase.stopConditions.flowBelow,
+          weight: phase.stopConditions.weight,
+          waterPumpedInPhase: phase.stopConditions.waterPumpedInPhase
+        } : null
+      })),
+      globalStopConditions: this.globalStopConditions
+    };
   }
 
   static parse(obj) {
