@@ -10,7 +10,11 @@ void stmCommsTask(void* params);
 void stmCommsInit(HardwareSerial& serial) {
   serial.setRxBufferSize(256);
   serial.setTxBufferSize(256);
-  serial.begin(460800);
+  #if defined(RX1) && defined(TX1)
+    serial.begin(115200, SERIAL_8N1, RX1, TX1);
+  #else
+    serial.begin(115200, SERIAL_8N1, 16, 17); // Fallback hardcoded
+  #endif
 
   // mcuComms.setDebugPort(&Serial);
   mcuComms.begin(serial);
