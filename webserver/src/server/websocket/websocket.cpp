@@ -5,6 +5,7 @@
 #include "ESPAsyncWebServer.h"
 #include "AsyncTCP.h"
 #include <ArduinoJson.h>
+#include "../../stm_comms/stm_comms.h"
 
 const std::string WS_MSG_SENSOR_DATA = "sensor_data_update";
 const std::string WS_MSG_SHOT_DATA = "shot_data_update";
@@ -13,7 +14,7 @@ const std::string WS_MSG_LOG = "log_record";
 namespace websocket {
   AsyncWebSocket wsServer("/ws");
   SemaphoreHandle_t jsonMutex = xSemaphoreCreateRecursiveMutex();
-  DynamicJsonDocument jsonDoc(2048);
+  DynamicJsonDocument jsonDoc(4096);
 
   bool lockJson() {
     return xSemaphoreTakeRecursive(jsonMutex, portMAX_DELAY) == pdTRUE;
@@ -43,6 +44,9 @@ namespace websocket {
   }
 }
 
+void parseAndSendProfile(JsonObject data);
+Phase parsePhase(JsonObject obj);
+Transition parseTransition(JsonObject obj);
 void handleWebSocketMessage(void* arg, uint8_t* data, size_t len);
 void onEvent(AsyncWebSocket* server, AsyncWebSocketClient* client, AwsEventType type, void* arg, uint8_t* data, size_t len);
 
@@ -96,8 +100,14 @@ void handleWebSocketMessage(void* arg, uint8_t* data, size_t len) {
     }
 
     const std::string action = websocket::jsonDoc["action"].as<std::string>();
-    const std::string actionData = websocket::jsonDoc["data"].as<std::string>();
-    LOG_INFO("Message: %s -> %s\n", action.c_str(), actionData.c_str());
+    if (action == "run_profile") {
+      LOG_INFO("Sending profile to STM");
+      parseAndSendProfile(websocket::jsonDoc["data"]);
+    }
+    else {
+      const std::string actionData = websocket::jsonDoc["data"].as<std::string>();
+      LOG_INFO("Message: %s -> %s\n", action.c_str(), actionData.c_str());
+    }
     websocket::unlockJson();
   }
 }
@@ -169,4 +179,63 @@ void wsSendLog(std::string log, std::string source) {
   websocket::unlockJson();
 
   websocket::wsSendWithBuffer(serializedMsg);
+}
+
+Transition parseTransition(JsonObject obj) {
+Transition t;
+  t.start = obj["start"] | -1.0f;
+  t.end = obj["end"] | -1.0f;
+  
+  // Map String to Enum for Curve
+  String curveStr = obj["curve"].as<String>();
+  if (curveStr == "EASE_IN") t.curve = TransitionCurve::EASE_IN;
+  else if (curveStr == "EASE_OUT") t.curve = TransitionCurve::EASE_OUT;
+  else if (curveStr == "EASE_IN_OUT") t.curve = TransitionCurve::EASE_IN_OUT;
+  else if (curveStr == "INSTANT") t.curve = TransitionCurve::INSTANT;
+  else t.curve = TransitionCurve::LINEAR; // Default
+
+  t.time = obj["time"] | 0;
+  return t;
+}
+
+Phase parsePhase(JsonObject obj) {
+  Phase p;
+  // Map "FLOW" or "PRESSURE" to enum
+  String typeStr = obj["type"].as<String>();
+  if (typeStr == "FLOW" || obj["type"] == 0) p.type = PHASE_TYPE::PHASE_TYPE_FLOW;
+  else p.type = PHASE_TYPE::PHASE_TYPE_PRESSURE;
+
+  p.target = parseTransition(obj["target"]);
+  p.restriction = obj["restriction"] | -1.0f;
+  
+  JsonObject sc = obj["stopConditions"];
+  if (!sc.isNull()) {
+    p.stopConditions.time = sc["time"] | -1;
+    p.stopConditions.pressureAbove = sc["pressureAbove"] | -1.0f;
+    p.stopConditions.pressureBelow = sc["pressureBelow"] | -1.0f;
+    p.stopConditions.flowAbove = sc["flowAbove"] | -1.0f;
+    p.stopConditions.flowBelow = sc["flowBelow"] | -1.0f;
+    p.stopConditions.weight = sc["weight"] | -1.0f;
+    p.stopConditions.waterPumpedInPhase = sc["waterPumpedInPhase"] | -1.0f;
+  }
+  return p;
+}
+
+void parseAndSendProfile(JsonObject data) {
+  Profile p;
+  JsonArray phases = data["phases"];
+  
+  for (JsonObject phaseObj : phases) {
+    p.addPhase(parsePhase(phaseObj));
+  }
+
+  JsonObject gsc = data["globalStopConditions"];
+  if (!gsc.isNull()) {
+    p.globalStopConditions.time = gsc["time"] | -1;
+    p.globalStopConditions.weight = gsc["weight"] | -1.0f;
+    p.globalStopConditions.waterPumped = gsc["waterPumped"] | -1.0f;
+  }
+
+  // Send to STM
+  stmCommsSendProfile(p);
 }
