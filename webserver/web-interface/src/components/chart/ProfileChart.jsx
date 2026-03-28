@@ -20,7 +20,7 @@ function getFlowTarget(phase) {
 }
 
 function profileToDatasets(profile) {
-  const data = { labels: [], pressureData: [], flowData: [] };
+  const data = { labels: [], pressureData: [], flowData: [], pressureLimit: [], flowLimit: []};
   let phaseStartTime = 0;
   
   if (profile && profile.phases) {
@@ -32,31 +32,39 @@ function profileToDatasets(profile) {
       const pressureTargets = getPressureTarget(phase);
       const flowTargets = getFlowTarget(phase);
 
-      data.labels.push(phaseStartTime / 1000);
-      data.flowData.push(flowTargets[0]);
-      data.pressureData.push(pressureTargets[0]);
+      const restriction = phase.restriction > 0 ? phase.restriction : null;
+      const pLimit = (phase.type === PhaseTypes.FLOW) ? restriction : null;
+      const fLimit = (phase.type === PhaseTypes.PRESSURE) ? restriction : null;
+
+      const t0 = phaseStartTime / 1000;
+      data.flowData.push({ x: t0, y: flowTargets[0] });
+      data.pressureData.push({ x: t0, y: pressureTargets[0] });
+      data.pressureLimit.push({ x: t0, y: pLimit });
+      data.flowLimit.push({ x: t0, y: fLimit });
 
       if (transitionTime < phaseTime && transitionTime > 0) {
-        data.labels.push((phaseStartTime + transitionTime) / 1000);
-        data.flowData.push(flowTargets[1]);
-        data.pressureData.push(pressureTargets[1]);
+        const t1 = (phaseStartTime + transitionTime) / 1000;
+        data.flowData.push({ x: t1, y: flowTargets[1] });
+        data.pressureData.push({ x: t1, y: pressureTargets[1] });
+        data.pressureLimit.push({ x: t1, y: pLimit });
+        data.flowLimit.push({ x: t1, y: fLimit });
       }
       
-      data.labels.push((phaseStartTime + phaseTime) / 1000);
-      data.flowData.push(flowTargets[1]);
-      data.pressureData.push(pressureTargets[1]);
+      const t2 = (phaseStartTime + phaseTime) / 1000;
+      data.flowData.push({ x: t2, y: flowTargets[1] });
+      data.pressureData.push({ x: t2, y: pressureTargets[1] });
+      data.pressureLimit.push({ x: t2, y: pLimit });
+      data.flowLimit.push({ x: t2, y: fLimit });
 
-      phaseStartTime += phaseTime + 500;
+      phaseStartTime += phaseTime;
     });
   }
   return data;
 }
 
 function mapToChartData(profile, storedProfile, theme) {
-  // 1. Process the profile you are building (Solid Lines)
   const data = profileToDatasets(profile);
   
-  // 2. Process the stored profile (if it exists)
   const storedData = storedProfile ? profileToDatasets(storedProfile) : null;
 
   const datasets = [
@@ -78,9 +86,30 @@ function mapToChartData(profile, storedProfile, theme) {
       yAxisID: 'y2',
       spanGaps: true,
     },
+    {
+      label: 'Pressure Limit',
+      data: data.pressureLimit,
+      borderColor: alpha(theme.palette.pressure?.main || '#2196f3', 0.4), // Lighter color
+      borderDash: [10, 5], // Dotted line style
+      borderWidth: 2,
+      pointRadius: 0,
+      tension: 0,
+      yAxisID: 'y1',
+      spanGaps: true,
+    },
+    {
+      label: 'Flow Limit',
+      data: data.flowLimit,
+      borderColor: alpha(theme.palette.flow?.main || '#9c27b0', 0.4), // Lighter color
+      borderDash: [10, 5], // Dotted line style
+      borderWidth: 2,
+      pointRadius: 0,
+      tension: 0,
+      yAxisID: 'y2',
+      spanGaps: true,
+    }
   ];
 
-  // 3. Add Stored Profile as Dashed Lines
   if (storedData) {
     datasets.push({
       label: 'Stored Pressure',
@@ -105,10 +134,10 @@ function mapToChartData(profile, storedProfile, theme) {
     });
   }
 
-  return { labels: data.labels, datasets };
+  return { datasets };
 }
 
-function ProfileChart({ profile, storedProfile }) { // <--- Receive storedProfile
+function ProfileChart({ profile, storedProfile }) {
   const chartRef = useRef(null);
   const theme = useTheme();
   
