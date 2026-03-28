@@ -1,6 +1,6 @@
-/* 09:32 15/03/2023 - change triggering comment */
 #include "esp_comms.h"
 #include "pindef.h"
+#include "../log.h"
 
 namespace {
   class McuCommsSingleton {
@@ -25,10 +25,15 @@ void espCommsInit() {
   McuCommsSingleton::getInstance().setProfileReceivedCallback(onProfileReceived);
   McuCommsSingleton::getInstance().setRemoteScalesWeightReceivedCallback(onRemoteScalesWeightReceived);
   McuCommsSingleton::getInstance().setRemoteScalesDisconnectedCallback(onRemoteScalesDisconnected);
+  McuCommsSingleton::getInstance().setRequestActiveProfileCallback(onActiveProfileRequested);
 }
 
 void espCommsReadData() {
   McuCommsSingleton::getInstance().readDataAndTick();
+}
+
+void espCommsSendProfile(Profile& profile) {
+  McuCommsSingleton::getInstance().sendProfile(profile);
 }
 
 volatile uint32_t sensorDataTimer = 0;

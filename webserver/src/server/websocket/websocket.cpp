@@ -104,6 +104,10 @@ void handleWebSocketMessage(void* arg, uint8_t* data, size_t len) {
       LOG_INFO("Sending profile to STM");
       parseAndSendProfile(websocket::jsonDoc["data"]);
     }
+    else if (action == "request_active_profile") {
+      LOG_INFO("Frontend manually requested the active profile");
+      stmCommsRequestActiveProfile(); 
+    }
     else {
       const std::string actionData = websocket::jsonDoc["data"].as<std::string>();
       LOG_INFO("Message: %s -> %s\n", action.c_str(), actionData.c_str());

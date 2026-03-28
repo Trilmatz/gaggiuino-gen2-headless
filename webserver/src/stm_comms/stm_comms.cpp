@@ -1,5 +1,7 @@
 #include "stm_comms.h"
 #include "../task_config.h"
+#include "../server/websocket/websocket.h"
+#include "../log/log.h"
 
 namespace {
   McuComms mcuComms;
@@ -8,8 +10,8 @@ namespace {
 
 void stmCommsTask(void* params);
 void stmCommsInit(HardwareSerial& serial) {
-  serial.setRxBufferSize(256);
-  serial.setTxBufferSize(256);
+  serial.setRxBufferSize(1024); 
+  serial.setTxBufferSize(1024);
   #if defined(RX1) && defined(TX1)
     serial.begin(115200, SERIAL_8N1, RX1, TX1);
   #else
@@ -22,6 +24,7 @@ void stmCommsInit(HardwareSerial& serial) {
   // Set callbacks
   mcuComms.setShotSnapshotCallback(onShotSnapshotReceived);
   mcuComms.setSensorStateSnapshotCallback(onSensorStateSnapshotReceived);
+  mcuComms.setProfileReceivedCallback(onProfileReceived);
   mcuComms.setRemoteScalesTareCommandCallback(onScalesTareReceived);
 
   xTaskCreateUniversal(stmCommsTask, "stmComms", configMINIMAL_STACK_SIZE + 2400, NULL, PRIORITY_STM_COMMS, NULL, CORE_STM_COMMS);
@@ -30,7 +33,7 @@ void stmCommsInit(HardwareSerial& serial) {
 void stmCommsTask(void* params) {
   for (;;) {
     stmCommsReadData();
-    vTaskDelay(50 / portTICK_PERIOD_MS);
+    vTaskDelay(10 / portTICK_PERIOD_MS);
   }
 }
 
@@ -56,4 +59,15 @@ void stmCommsSendProfile(Profile& profile) {
   if (xSemaphoreTakeRecursive(mcucLock, portMAX_DELAY) == pdFALSE) return;
   mcuComms.sendProfile(profile);
   xSemaphoreGiveRecursive(mcucLock);
+}
+
+void stmCommsRequestActiveProfile() {
+  if (xSemaphoreTakeRecursive(mcucLock, portMAX_DELAY) == pdFALSE) return;
+  mcuComms.requestActiveProfile();
+  xSemaphoreGiveRecursive(mcucLock);
+}
+
+void onProfileReceived(Profile& profile) {
+  LOG_INFO("<< STM32 Profile Received! Phases: %u", profile.phaseCount());
+  wsSendProfile(profile);
 }

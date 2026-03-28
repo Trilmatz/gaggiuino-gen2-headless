@@ -24,7 +24,7 @@ void ProfileSerializer::deserializeProfile(vector<uint8_t>& buffer, Profile& pro
   size_t phaseCount;
   memcpy(&phaseCount, buffer.data(), sizeof(profile.phaseCount()));
   profile.phases.clear();
-  profile.phases.reserve(phaseCount);
+  profile.phases.resize(phaseCount);
   memcpy(profile.phases.data(), buffer.data() + sizeof(profile.phaseCount()), phaseCount * sizeof(Phase));
   memcpy(&profile.globalStopConditions, buffer.data() + sizeof(profile.phaseCount()) + phaseCount * sizeof(Phase), sizeof(profile.globalStopConditions));
 }
@@ -289,6 +289,16 @@ void McuComms::sendRemoteScalesDisconnected() {
   transfer.sendData(messageSize, static_cast<uint8_t>(McuCommsMessageType::MCUC_DATA_REMOTE_SCALES_DISCONNECTED));
 }
 
+void McuComms::setRequestActiveProfileCallback(RequestActiveProfileCallback callback) {
+  requestActiveProfileCallback = callback;
+}
+
+void McuComms::requestActiveProfile() {
+  if (!isConnected()) return;
+  uint16_t messageSize = transfer.txObj(static_cast<uint8_t>(McuCommsMessageType::MCUC_REQ_ACTIVE_PROFILE));
+  transfer.sendData(messageSize, static_cast<uint8_t>(McuCommsMessageType::MCUC_REQ_ACTIVE_PROFILE));
+}
+
 void McuComms::readDataAndTick() {
   uint8_t availableData = transfer.available();
 
@@ -336,6 +346,12 @@ void McuComms::readDataAndTick() {
     } case McuCommsMessageType::MCUC_DATA_REMOTE_SCALES_DISCONNECTED: {
       log("Received scales disconnected message");
       remoteScalesDisconnected();
+      break;
+    } case McuCommsMessageType::MCUC_REQ_ACTIVE_PROFILE: {
+      log("Received request for active profile\n");
+      if (requestActiveProfileCallback) {
+        requestActiveProfileCallback();
+      }
       break;
     }
     default:

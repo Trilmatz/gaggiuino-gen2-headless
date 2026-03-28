@@ -11,8 +11,10 @@ void espCommsReadData();
 void espCommsSendSensorData(const SensorState& state, uint32_t frequency = 1000);
 void espCommsSendShotData(ShotSnapshot& shotData, uint32_t frequency = 100);
 void espCommsSendTareScalesCommand();
+void espCommsSendProfile(Profile& profile);
 
 void onProfileReceived(Profile& profile);
+void onActiveProfileRequested();
 void onRemoteScalesWeightReceived(float weight);
 void onRemoteScalesDisconnected();
 

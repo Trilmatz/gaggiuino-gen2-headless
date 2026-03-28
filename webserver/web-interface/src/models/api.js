@@ -1,6 +1,7 @@
 export const MSG_TYPE_SHOT_DATA = 'shot_data_update';
 export const MSG_TYPE_SENSOR_DATA = 'sensor_data_update';
 export const MSG_TYPE_LOG = 'log_record';
+export const MSG_TYPE_PROFILE_UPDATE = 'profile_update';
 
 export function filterSocketMessage(message, ...types) {
   if (!message || !message.data) {

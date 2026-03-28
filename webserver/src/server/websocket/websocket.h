@@ -10,5 +10,6 @@ void wsCleanup();
 void wsSendSensorStateSnapshotToClients(SensorStateSnapshot& snapshot);
 void wsSendShotSnapshotToClients(ShotSnapshot& snapshot);
 void wsSendLog(std::string log, std::string source = "webserver");
+void wsSendProfile(Profile& profile);
 
 #endif

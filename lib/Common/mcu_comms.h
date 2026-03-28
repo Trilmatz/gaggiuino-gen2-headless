@@ -57,6 +57,7 @@ class McuComms {
 private:
   using ShotSnapshotReceivedCallback = std::function<void(ShotSnapshot&)>;
   using ProfileReceivedCallback = std::function<void(Profile&)>;
+  using RequestActiveProfileCallback = std::function<void()>;
   using SensorStateSnapshotReceivedCallback = std::function<void(SensorStateSnapshot&)>;
   using ResponseReceivedCallback = std::function<void(McuCommsResponse&)>;
   using RemoteScalesWeightReceivedCallback = std::function<void(float)>;
@@ -69,6 +70,7 @@ private:
   SerialTransfer transfer;
   ShotSnapshotReceivedCallback shotSnapshotCallback = nullptr;
   ProfileReceivedCallback profileCallback = nullptr;
+  RequestActiveProfileCallback requestActiveProfileCallback = nullptr;
   SensorStateSnapshotReceivedCallback sensorStateSnapshotCallback = nullptr;
   ResponseReceivedCallback responseReceivedCallback = nullptr;
   RemoteScalesWeightReceivedCallback remoteScalesWeightReceivedCallback = nullptr;
@@ -112,9 +114,11 @@ public:
   void setRemoteScalesWeightReceivedCallback(RemoteScalesWeightReceivedCallback callback);
   void setRemoteScalesTareCommandCallback(RemoteScalesTareCommandCallback callback);
   void setRemoteScalesDisconnectedCallback(RemoteScalesDisconnectedCallback callback);
+  void setRequestActiveProfileCallback(RequestActiveProfileCallback callback);
 
   void sendShotData(const ShotSnapshot& snapshot);
   void sendProfile(Profile& profile);
+  void requestActiveProfile();
   void sendSensorStateSnapshot(const SensorStateSnapshot& snapshot);
   void sendResponse(McuCommsResponse response);
   void sendRemoteScalesWeight(float weight);
