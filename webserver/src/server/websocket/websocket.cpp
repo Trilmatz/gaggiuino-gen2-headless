@@ -185,6 +185,82 @@ void wsSendLog(std::string log, std::string source) {
   websocket::wsSendWithBuffer(serializedMsg);
 }
 
+void wsSendProfile(Profile& profile) {
+  if (!websocket::lockJson()) return;
+  
+  JsonObject root = websocket::jsonDoc.to<JsonObject>();
+  root["action"] = "profile_update";
+
+  JsonObject data = root.createNestedObject("data");
+  //   JsonArray phases = data.createNestedArray("phases");
+    
+  //   for(auto& p : profile.phases) {
+  //     JsonObject ph = phases.createNestedObject();
+  //     // Convert C++ Enum to String for React
+  //     ph["type"] = (p.type == PHASE_TYPE::PHASE_TYPE_FLOW) ? "FLOW" : "PRESSURE";
+      
+  //     JsonObject target = ph.createNestedObject("target");
+  //     target["start"] = p.target.start;
+  //     target["end"] = p.target.end;
+  //     target["time"] = p.target.time / 1000.0f;
+      
+  //     // Map curve enum to int (0=Linear, 1=Instant, etc)
+  //     target["curve"] = (int)p.target.curve; 
+
+  //     JsonObject stop = ph.createNestedObject("stopConditions");
+  //     stop["time"] = p.stopConditions.time / 1000.0f;
+  //     stop["weight"] = p.stopConditions.weight;
+  //   }
+    
+  //   std::string msg;
+  //   serializeJson(root, msg);
+  //   websocket::unlockJson();
+    
+  //   websocket::wsServer.textAll(msg.c_str());
+  // }
+
+  // Serialize the array of phases
+  JsonArray phases = data.createNestedArray("phases");
+  for (size_t i = 0; i < profile.phaseCount(); i++) {
+    JsonObject phaseObj = phases.createNestedObject();
+    Phase& p = profile.phases[i];
+
+    phaseObj["type"] = (p.type == PHASE_TYPE::PHASE_TYPE_FLOW) ? "FLOW" : "PRESSURE";
+
+    // Target object
+    JsonObject targetObj = phaseObj.createNestedObject("target");
+    targetObj["start"] = p.target.start;
+    targetObj["end"] = p.target.end;
+    targetObj["time"] = p.target.time;
+    
+    // Map the C++ enum to the JS string 
+    targetObj["curve"] = (p.target.curve == TransitionCurve::INSTANT) ? "INSTANT" : "LINEAR";
+
+    phaseObj["restriction"] = p.restriction;
+
+    // Stop conditions object
+    JsonObject stopObj = phaseObj.createNestedObject("stopConditions");
+    stopObj["time"] = p.stopConditions.time;
+    stopObj["pressureAbove"] = p.stopConditions.pressureAbove;
+    stopObj["pressureBelow"] = p.stopConditions.pressureBelow;
+    stopObj["weight"] = p.stopConditions.weight;
+    stopObj["waterPumpedInPhase"] = p.stopConditions.waterPumpedInPhase;
+  }
+
+  // Serialize global stop conditions
+  JsonObject globalStopObj = data.createNestedObject("globalStopConditions");
+  globalStopObj["time"] = profile.globalStopConditions.time;
+  globalStopObj["weight"] = profile.globalStopConditions.weight;
+  globalStopObj["waterPumped"] = profile.globalStopConditions.waterPumped;
+
+  std::string serializedMsg; 
+  serializeJson(root, serializedMsg);
+  websocket::unlockJson();
+
+  websocket::wsServer.textAll(serializedMsg.c_str(), serializedMsg.length());
+}
+
+
 Transition parseTransition(JsonObject obj) {
 Transition t;
   t.start = obj["start"] | -1.0f;
