@@ -27,14 +27,15 @@ export default function Profiles() {
   // -------------------------------------------------------------
   // STATE
   // -------------------------------------------------------------
-  const [elements, setElements] = useState([
-    { id: 1, type: 'select', value: 'PRESSURE' },
-    { id: 2, type: 'select', value: 'LINEAR' },
-    { id: 3, type: 'text', value: '0' },
-    { id: 4, type: 'text', value: '9' },
-    { id: 5, type: 'text', value: '5' },
-    { id: 6, type: 'text', value: '30' },
-  ]);
+  // const [elements, setElements] = useState([
+  //   { id: 1, type: 'select', value: 'PRESSURE' },
+  //   { id: 2, type: 'select', value: 'LINEAR' },
+  //   { id: 3, type: 'text', value: '0' },
+  //   { id: 4, type: 'text', value: '9' },
+  //   { id: 5, type: 'text', value: '5' },
+  //   { id: 6, type: 'text', value: '30' },
+  // ]);
+  const [elements, setElements] = useState([]);
   const [nextId, setNextId] = useState(7);
   const [error, setError] = useState(null);
   
@@ -42,6 +43,9 @@ export default function Profiles() {
   const [profile, setProfile] = useState(new Profile([], {}));
   // storedProfile = The one currently active on the machine (received via WebSocket)
   const [storedProfile, setStoredProfile] = useState(null);
+  const [savedProfiles, setSavedProfiles] = useState([]);
+  const [selectedProfileName, setSelectedProfileName] = useState("");
+  const [newProfileName, setNewProfileName] = useState("");
 
   // -------------------------------------------------------------
   // WEBSOCKET
@@ -50,6 +54,16 @@ export default function Profiles() {
     share: true,
     shouldReconnect: () => true,
   });
+
+  // -------------------------------------------------------------
+  // LOAD SAVED PROFILES FROM LOCAL STORAGE
+  // -------------------------------------------------------------
+  useEffect(() => {
+    const stored = localStorage.getItem("gaggiuino_profiles");
+    if (stored) {
+      setSavedProfiles(JSON.parse(stored));
+    }
+  }, []);
 
   // -------------------------------------------------------------
   // Request profile
@@ -100,6 +114,8 @@ export default function Profiles() {
         let curveStyle = CurveStyles.LINEAR;
         if (curveStr === 'INSTANT') curveStyle = CurveStyles.INSTANT;
         if (curveStr === 'EASE_IN') curveStyle = CurveStyles.EASE_IN;
+        if (curveStr === 'EASE_OUT') curveStyle = CurveStyles.EASE_OUT;
+        if (curveStr === 'EASE_IN_OUT') curveStyle = CurveStyles.EASE_IN_OUT;
         
         phases.push(new Phase(
           phaseType,
@@ -152,19 +168,43 @@ export default function Profiles() {
   };
 
   const handleRemoveAll = () => {
-    setElements([
-      { id: 1, type: 'select', value: 'PRESSURE' },
-      { id: 2, type: 'select', value: 'LINEAR' },
-      { id: 3, type: 'text', value: '0' },
-      { id: 4, type: 'text', value: '9' },
-      { id: 5, type: 'text', value: '5' },
-      { id: 6, type: 'text', value: '30' },
-    ]);
+    setElements([]);
     setNextId(7);
   };
 
   const handleInputChange = (event, id) => {
     setElements(elements.map(el => el.id === id ? { ...el, value: event.target.value } : el));
+  };
+
+  const handleSaveToBrowser = () => {
+    if (!newProfileName) return;
+    
+    // Package up the current UI inputs
+    const newProfile = {
+      name: newProfileName,
+      elements: elements // Save the exact input rows!
+    };
+
+    const updatedProfiles = [...savedProfiles, newProfile];
+    setSavedProfiles(updatedProfiles);
+    localStorage.setItem("gaggiuino_profiles", JSON.stringify(updatedProfiles));
+    setNewProfileName("");
+    setSelectedProfileName(newProfileName);
+  };
+
+  const handleSelectProfile = (event) => {
+    const name = event.target.value;
+    setSelectedProfileName(name);
+
+    const target = savedProfiles.find(p => p.name === name);
+    if (target) {
+      setElements(target.elements);
+      // sendMessage(JSON.stringify({ action: "run_profile", data: profile }));
+      const highestId = target.elements.length > 0 
+        ? Math.max(...target.elements.map(el => el.id)) 
+        : 0;
+      setNextId(highestId + 1);
+    }
   };
 
   // -------------------------------------------------------------
@@ -174,17 +214,41 @@ export default function Profiles() {
     <div>
       <Container sx={{ mt: theme.spacing(2) }}>
         <Card sx={{ mt: theme.spacing(2) }}>
-          <Grid container columns={{ xs: 1, sm: 2 }}>
-            <Grid item xs={1}>
-              <CardContent>
-                <Typography gutterBottom variant="h5">Load Profile</Typography>
-              </CardContent>
-              <CardActions>
-                <IconButton style={{ float: 'right' }} color="primary"><UploadFileIcon fontSize="large" /></IconButton>
-                <IconButton style={{ float: 'right' }} color="primary"><QrCodeIcon fontSize="large" /></IconButton>
-              </CardActions>
+          <CardContent>
+            <Typography gutterBottom variant="h5">Profile Manager</Typography>
+            <Grid container spacing={2} alignItems="center">
+              
+              {/* Dropdown to select a saved profile */}
+              <Grid item xs={12} sm={6}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Load Saved Profile</InputLabel>
+                  <Select value={selectedProfileName} label="Load Saved Profile" onChange={handleSelectProfile}>
+                    <MenuItem value=""><em>None</em></MenuItem>
+                    {savedProfiles.map((p, i) => (
+                      <MenuItem key={i} value={p.name}>{p.name}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+
+              {/* Input to save the current profile */}
+              <Grid item xs={12} sm={4}>
+                <TextField 
+                  label="Save As Name..." 
+                  size="small" 
+                  fullWidth 
+                  value={newProfileName}
+                  onChange={(e) => setNewProfileName(e.target.value)}
+                />
+              </Grid>
+              <Grid item xs={12} sm={2}>
+                 <IconButton onClick={handleSaveToBrowser} color="primary">
+                    <UploadFileIcon fontSize="large" />
+                 </IconButton>
+              </Grid>
+
             </Grid>
-          </Grid>
+          </CardContent>
         </Card>
       </Container>
 
@@ -235,8 +299,10 @@ export default function Profiles() {
                                   <InputLabel>Curve</InputLabel>
                                   <Select value={element.value} label="Curve" onChange={(e) => handleInputChange(e, element.id)}>
                                     <MenuItem value="LINEAR">Linear</MenuItem>
+                                    <MenuItem value="EASE_IN_OUT">Ease In Out</MenuItem>
                                     <MenuItem value="INSTANT">Instant</MenuItem>
                                     <MenuItem value="EASE_IN">Ease In</MenuItem>
+                                    <MenuItem value="EASE_OUT">Ease Out</MenuItem>
                                   </Select>
                                 </FormControl>
                               </Grid>
@@ -262,7 +328,7 @@ export default function Profiles() {
       <Container sx={{ mt: theme.spacing(2) }}>
         <Paper sx={{ mt: theme.spacing(2), p: theme.spacing(2) }}>
           <Typography variant="h5" sx={{ mb: theme.spacing(2) }}>
-            Profile Syntax / Preview
+            Profile Preview
           </Typography>
           <Grid container columns={{ xs: 1, sm: 3 }} spacing={2}>
             <Grid item xs={1} sm={3}>
@@ -271,8 +337,9 @@ export default function Profiles() {
               </Alert>
             </Grid>
             <Grid item xs={12} height="400">
-              {/* Pass BOTH profiles to the chart */}
-              <ProfileChart profile={profile} storedProfile={storedProfile} />
+              <div style={{ height: '600px', width: '100%', position: 'relative' }}>
+                <ProfileChart profile={profile} storedProfile={storedProfile} />
+              </div>
             </Grid>
           </Grid>
         </Paper>
