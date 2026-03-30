@@ -5,7 +5,7 @@ import {
 } from 'chart.js';
 import { useTheme, alpha } from '@mui/material';
 import getShotChartConfig from './ChartConfig';
-import { PhaseTypes } from '../../models/profile';
+import { PhaseTypes, CurveStyles } from '../../models/profile';
 
 ChartJS.register(CategoryScale, LinearScale, TimeScale, PointElement, LineElement, Title, Tooltip, Legend);
 
@@ -19,44 +19,88 @@ function getFlowTarget(phase) {
   return [phase.target.start, phase.target.end || phase.target.start];
 }
 
+function generateTransitionData(transitionType, startValue, endValue, startTime, endTime, curveDuration) {
+  const data = [];
+  
+  if (startValue === null || endValue === null) return data;
+
+  const stepInterval = 0.1; 
+  const stepCount = Math.floor(curveDuration / stepInterval);
+
+  if (transitionType === 'INSTANT' || transitionType === CurveStyles.INSTANT || curveDuration <= 0) {
+    data.push({ x: startTime, y: endValue });
+    data.push({ x: endTime, y: endValue });
+    return data;
+  }
+
+  for (let i = 0; i <= stepCount; i++) {
+    const time = startTime + (i * stepInterval);
+    const progress = i / stepCount;
+    let value;
+
+    switch(transitionType) {
+      case 'EASE_IN_OUT':
+      case CurveStyles.EASE_IN_OUT:
+        value = startValue + (endValue - startValue) * (0.5 - Math.cos(Math.PI * progress) / 2);
+        break;
+      case 'EASE_IN':
+      case CurveStyles.EASE_IN:
+        value = startValue + (endValue - startValue) * (progress * progress);
+        break;
+      case 'EASE_OUT':
+      case CurveStyles.EASE_OUT:
+        value = startValue + (endValue - startValue) * (1 - (1 - progress) * (1 - progress));
+        break;
+      case 'LINEAR':
+      case CurveStyles.LINEAR:
+      default:
+        value = startValue + (endValue - startValue) * progress;
+        break;
+    }
+    data.push({ x: time, y: value });
+  }
+  return data;
+}
+
 function profileToDatasets(profile) {
-  const data = { labels: [], pressureData: [], flowData: [], pressureLimit: [], flowLimit: []};
-  let phaseStartTime = 0;
+  const data = { pressureData: [], flowData: [], pressureLimit: [], flowLimit: [] };
+  let phaseStartTimeSec = 0;
   
   if (profile && profile.phases) {
     profile.phases.forEach((phase) => {
-      // Logic for time conversion (seconds to ms)
-      const phaseTime = phase.stopConditions?.time || 5000;
-      const transitionTime = (phase.target.time !== undefined) ? phase.target.time : phaseTime;
+      const phaseTimeSec = (phase.stopConditions?.time || 5000) / 1000;
+      const transitionTimeSec = (phase.target.time !== undefined ? phase.target.time : (phase.stopConditions?.time || 5000)) / 1000;
 
-      const pressureTargets = getPressureTarget(phase);
-      const flowTargets = getFlowTarget(phase);
+      const pTargets = getPressureTarget(phase);
+      const fTargets = getFlowTarget(phase);
+      const curveType = phase.target.curve || 'LINEAR';
+
+      const tStart = phaseStartTimeSec;
+      const tCurveEnd = phaseStartTimeSec + transitionTimeSec;
+      const tPhaseEnd = phaseStartTimeSec + phaseTimeSec;
+
+      const pCurvePoints = generateTransitionData(curveType, pTargets[0], pTargets[1], tStart, tCurveEnd, transitionTimeSec);
+      const fCurvePoints = generateTransitionData(curveType, fTargets[0], fTargets[1], tStart, tCurveEnd, transitionTimeSec);
+
+      data.pressureData.push(...pCurvePoints);
+      data.flowData.push(...fCurvePoints);
+
+      if (transitionTimeSec < phaseTimeSec) {
+        if (pTargets[1] !== null) data.pressureData.push({ x: tPhaseEnd, y: pTargets[1] });
+        if (fTargets[1] !== null) data.flowData.push({ x: tPhaseEnd, y: fTargets[1] });
+      }
 
       const restriction = phase.restriction > 0 ? phase.restriction : null;
       const pLimit = (phase.type === PhaseTypes.FLOW) ? restriction : null;
       const fLimit = (phase.type === PhaseTypes.PRESSURE) ? restriction : null;
 
-      const t0 = phaseStartTime / 1000;
-      data.flowData.push({ x: t0, y: flowTargets[0] });
-      data.pressureData.push({ x: t0, y: pressureTargets[0] });
-      data.pressureLimit.push({ x: t0, y: pLimit });
-      data.flowLimit.push({ x: t0, y: fLimit });
+      data.pressureLimit.push({ x: tStart, y: pLimit });
+      data.pressureLimit.push({ x: tPhaseEnd, y: pLimit });
+      data.flowLimit.push({ x: tStart, y: fLimit });
+      data.flowLimit.push({ x: tPhaseEnd, y: fLimit });
 
-      if (transitionTime < phaseTime && transitionTime > 0) {
-        const t1 = (phaseStartTime + transitionTime) / 1000;
-        data.flowData.push({ x: t1, y: flowTargets[1] });
-        data.pressureData.push({ x: t1, y: pressureTargets[1] });
-        data.pressureLimit.push({ x: t1, y: pLimit });
-        data.flowLimit.push({ x: t1, y: fLimit });
-      }
-      
-      const t2 = (phaseStartTime + phaseTime) / 1000;
-      data.flowData.push({ x: t2, y: flowTargets[1] });
-      data.pressureData.push({ x: t2, y: pressureTargets[1] });
-      data.pressureLimit.push({ x: t2, y: pLimit });
-      data.flowLimit.push({ x: t2, y: fLimit });
 
-      phaseStartTime += phaseTime;
+      phaseStartTimeSec += phaseTimeSec; 
     });
   }
   return data;
@@ -73,7 +117,7 @@ function mapToChartData(profile, storedProfile, theme) {
       data: data.pressureData,
       backgroundColor: alpha(theme.palette.pressure?.main || '#2196f3', 0.8),
       borderColor: theme.palette.pressure?.main || '#2196f3',
-      tension: 0.1,
+      tension: 0,
       yAxisID: 'y2', 
       spanGaps: true,
     },
@@ -117,7 +161,7 @@ function mapToChartData(profile, storedProfile, theme) {
       borderColor: '#B0BEC5',
       borderDash: [5, 5],
       pointRadius: 0,
-      tension: 0.1,
+      tension: 0,
       yAxisID: 'y2',
       spanGaps: true,
     });
